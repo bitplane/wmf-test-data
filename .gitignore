@@ -1,0 +1,3 @@
+.oracle/
+__pycache__/
+*.png.part
