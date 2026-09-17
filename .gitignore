@@ -1,3 +1,5 @@
 .oracle/
 __pycache__/
+build/
+*.png
 *.png.part

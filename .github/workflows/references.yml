@@ -1,0 +1,55 @@
+name: Reference images
+
+on:
+  workflow_dispatch:
+    inputs:
+      size:
+        description: '256 for a square, or 256x192'
+        type: string
+        default: '128'
+      corpus:
+        description: Comma-separated corpus names; blank renders all
+        type: string
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: references-${{ inputs.size }}
+
+jobs:
+  render:
+    runs-on: windows-2025
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: bitplane/pillow-wmf
+          ref: 4e116c516ba64b31618fd89d6b2cbba0ae9c033a
+          path: .oracle
+          sparse-checkout: scripts/windows_wmf_render.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install Pillow==12.3.0
+      - id: render
+        env:
+          SIZE: ${{ inputs.size }}
+          CORPUS: ${{ inputs.corpus }}
+        run: python scripts/render-references.py --size "$env:SIZE" --corpus "$env:CORPUS" --out build
+      - shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.render.outputs.size }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" build/*.tar.gz --clobber
+          else
+            gh release create "$TAG" build/*.tar.gz --title "$TAG" --notes ""
+          fi
