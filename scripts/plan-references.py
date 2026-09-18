@@ -1,8 +1,9 @@
-"""Work out which corpora have no reference asset yet, and at which sizes.
+"""Work out what the release for this corpus version is still missing.
 
-Sizes come from sizes.txt, corpora from the directories under corpora/, and what
-already exists from the releases themselves. Whatever is in the first two and not
-the third is the work. Deleting a release puts its corpora back on the list.
+A version is a tag on the commit. Its release holds the metafiles and the
+references for every size in sizes.txt, so whatever you download from one
+release agrees with itself. Sizes come from sizes.txt, corpora from the commit,
+and what already exists from the release. The difference is the work.
 """
 
 from __future__ import annotations
@@ -10,12 +11,32 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CORPORA = ROOT / "corpora"
 SIZES = ROOT / "sizes.txt"
+VERSION = re.compile(r"v\d+(?:\.\d+)*")
+
+
+def git(*args):
+    result = subprocess.run(
+        ["git", "-C", str(ROOT), *args], capture_output=True, text=True, check=False
+    )
+    if result.returncode:
+        raise SystemExit(f"git {' '.join(args)}: {result.stderr.strip()}")
+    return result.stdout
+
+
+def version():
+    tags = [tag for tag in git("tag", "--points-at", "HEAD").split() if VERSION.fullmatch(tag)]
+    if not tags:
+        raise SystemExit(
+            "No version tag on this commit. Tag it first, for example:\n"
+            "  git tag v1 && git push origin v1"
+        )
+    return max(tags, key=lambda tag: [int(part) for part in tag[1:].split(".")])
 
 
 def wanted_sizes():
@@ -39,13 +60,11 @@ def wanted_sizes():
 
 def wanted_corpora():
     """From the commit, not the working tree, since that is what gets released."""
-    result = subprocess.run(
-        ["git", "-C", str(ROOT), "ls-tree", "-d", "--name-only", "HEAD", "corpora/"],
-        capture_output=True, text=True, check=False,
+    found = sorted(
+        line.split("/", 1)[1]
+        for line in git("ls-tree", "-d", "--name-only", "HEAD", "corpora/").split()
+        if "/" in line
     )
-    if result.returncode:
-        raise SystemExit(f"Cannot list corpora: {result.stderr.strip()}")
-    found = sorted(line.split("/", 1)[1] for line in result.stdout.split() if "/" in line)
     if not found:
         raise SystemExit("No corpora committed under corpora/")
     return found
@@ -69,20 +88,26 @@ def main():
     if not args.repo:
         parser.error("Pass --repo owner/name or set GITHUB_REPOSITORY")
 
+    tag = version()
     corpora = wanted_corpora()
-    matrix, create = [], []
+    existing = published(tag, args.repo)
+    create = existing is None
+    if create:
+        existing = set()
 
-    for tag, width, height in wanted_sizes():
-        existing = published(tag, args.repo)
-        if existing is None:
-            create.append(tag)
-            existing = set()
-        missing = [name for name in corpora if f"{name}-{tag}.tar.gz" not in existing]
-        print(f"{tag}: {len(corpora) - len(missing)}/{len(corpora)} published"
+    data = [name for name in corpora if f"{name}.tar.gz" not in existing]
+    print(f"{tag}: {'new release' if create else 'existing release'}")
+    print(f"metafiles: {len(corpora) - len(data)}/{len(corpora)} published"
+          + (f", missing {', '.join(data)}" if data else ""))
+
+    matrix = []
+    for size, width, height in wanted_sizes():
+        missing = [name for name in corpora if f"{name}-{size}.tar.gz" not in existing]
+        print(f"{size}: {len(corpora) - len(missing)}/{len(corpora)} published"
               + (f", missing {', '.join(missing)}" if missing else ""))
         if missing:
             matrix.append({
-                "size": tag,
+                "size": size,
                 "width": width,
                 "height": height,
                 "corpora": ",".join(missing),
@@ -92,10 +117,12 @@ def main():
 
     if output := os.environ.get("GITHUB_OUTPUT"):
         with open(output, "a", encoding="utf-8") as stream:
+            stream.write(f"version={tag}\n")
+            stream.write(f"create={str(create).lower()}\n")
+            stream.write(f"data={json.dumps(data)}\n")
             stream.write(f"matrix={json.dumps(matrix)}\n")
-            stream.write(f"create={json.dumps(create)}\n")
 
-    print(f"{len(matrix)} job(s) to run, {len(create)} release(s) to open")
+    print(f"{len(data)} metafile archive(s) and {len(matrix)} render job(s) to run")
     return 0
 
 

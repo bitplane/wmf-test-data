@@ -6,24 +6,29 @@ Used as a test data to oracle mapping repo. WMFs are not mine, see individual
 collections for source info, your mileage may vary, use at your own risk etc
 etc.
 
-`corpora/<name>/` holds the metafiles from one source.
+`corpora/<name>/` holds the metafiles from one source. `sizes.txt` lists the
+output sizes worth holding references for.
 
-## Reference images
+## Using a release
 
-One release per output size, the sizes being whatever `sizes.txt` lists:
+A release is one version of the corpus: the metafiles, and the Windows
+references for every size, which means what you download from one release
+agrees with itself.
 
-    gh release download 257x193 -R bitplane/wmf-test-data
+    gh release download v1 -R bitplane/wmf-test-data -D cache
+    for f in cache/*.tar.gz; do tar xzf "$f" -C cache; done
 
-Assets are `<corpus>-<width>x<height>.tar.gz`, unpacking to
-`<width>x<height>/<corpus>/` so several sizes share one cache directory without
-colliding. A PNG sits at each metafile's path. Anything GDI would not draw has
-no PNG.
+Unpacks to metafiles at `<corpus>/<path>.wmf` and references beside them at
+`<size>/<corpus>/<path>.png`. A metafile with no PNG is one GDI would not draw.
+Pull the assets you want with `-p 'borderart*'` rather than the whole set.
 
-## Making them
+## Making one
+
+Tag the commit, push the tag, then:
 
     gh workflow run references.yml
 
-That renders every corpus and size combination the releases do not already have,
-one Windows job per size, and nothing at all when they are all there. Add a line
-to `sizes.txt` or a directory to `corpora/` and run it again to fill the gap.
-Delete a release to have it rebuilt from scratch.
+That publishes whatever the version's release does not already have, and
+nothing at all when it is complete. Add a line to `sizes.txt` and run it again
+to fill in that size. Change the metafiles and you want a new version, so tag
+again.

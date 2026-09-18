@@ -1,7 +1,8 @@
-name: Reference images
+name: Release
 
-# Renders whatever sizes.txt asks for that the releases do not already have.
-# Running it again does nothing. Delete a release to have it rebuilt.
+# Publishes the release for the version tag on this commit: the metafiles, and
+# their Windows references at every size in sizes.txt. Running it again fills
+# only what is missing. Tag a new version when the metafiles change.
 
 on:
   workflow_dispatch:
@@ -10,20 +11,24 @@ permissions:
   contents: write
 
 concurrency:
-  group: references
+  group: release
 
 jobs:
   plan:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
+      version: ${{ steps.plan.outputs.version }}
+      data: ${{ steps.plan.outputs.data }}
       matrix: ${{ steps.plan.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
         with:
-          # The plan needs sizes.txt and the corpus names, which it reads from the
-          # commit with git ls-tree. None of the metafiles have to come down.
+          # The plan reads sizes.txt, the version tag and the corpus names from
+          # the commit. None of the metafiles have to come down.
           filter: blob:none
+          fetch-tags: true
+          fetch-depth: 0
           sparse-checkout: |
             scripts
             sizes.txt
@@ -32,21 +37,39 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python scripts/plan-references.py
-      - name: Open any release that does not exist yet
+      - name: Open the release if it does not exist yet
+        if: steps.plan.outputs.create == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          CREATE: ${{ steps.plan.outputs.create }}
+          VERSION: ${{ steps.plan.outputs.version }}
+        run: gh release create "$VERSION" --title "$VERSION" --notes ""
+
+  data:
+    needs: plan
+    if: needs.plan.outputs.data != '[]'
+    name: metafiles
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          CORPORA: ${{ needs.plan.outputs.data }}
         run: |
-          # Up front, so parallel render jobs only ever upload.
-          for tag in $(echo "$CREATE" | python3 -c 'import json,sys; print(" ".join(json.load(sys.stdin)))'); do
-            gh release create "$tag" --title "$tag" --notes ""
+          mkdir -p build
+          for corpus in $(echo "$CORPORA" | python3 -c 'import json,sys; print(" ".join(json.load(sys.stdin)))'); do
+            tar czf "build/$corpus.tar.gz" -C corpora "$corpus"
           done
+          gh release upload "$VERSION" build/*.tar.gz --clobber
 
   render:
     needs: plan
     if: needs.plan.outputs.matrix != '[]'
     # Without this the job name lists every matrix value, sparse patterns included.
-    name: render ${{ matrix.size }}
+    name: references ${{ matrix.size }}
     runs-on: windows-2025
     timeout-minutes: 300
     strategy:
@@ -82,5 +105,5 @@ jobs:
       - shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ matrix.size }}
-        run: gh release upload "$TAG" build/*.tar.gz --clobber
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: gh release upload "$VERSION" build/*.tar.gz --clobber
