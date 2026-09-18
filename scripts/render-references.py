@@ -26,22 +26,6 @@ PLACEABLE_HEADER = 22
 CHUNK = 200
 
 
-def parse_size(text):
-    """Accept 256 for a square, or 256x192 for the rest."""
-    parts = text.lower().replace(" ", "").split("x")
-    if len(parts) == 1:
-        parts = parts * 2
-    if len(parts) != 2 or not all(parts):
-        raise ValueError(f"Expected WIDTH or WIDTHxHEIGHT, got {text!r}")
-    try:
-        width, height = (int(part) for part in parts)
-    except ValueError:
-        raise ValueError(f"Expected whole numbers, got {text!r}") from None
-    if width < 1 or height < 1:
-        raise ValueError(f"Dimensions must be positive, got {text!r}")
-    return width, height
-
-
 def select_corpora(selection):
     available = sorted(p.name for p in CORPORA.iterdir() if p.is_dir()) if CORPORA.is_dir() else []
     if not selection or selection.strip().lower() == "all":
@@ -103,8 +87,8 @@ def render_chunk(items, oracle, width, height):
     try:
         result = subprocess.run(
             [
-                sys.executable, str(Path(__file__).resolve()),
-                "--worker", str(spec), "--oracle", str(oracle), "--size", f"{width}x{height}",
+                sys.executable, str(Path(__file__).resolve()), "--worker", str(spec),
+                "--oracle", str(oracle), "--width", str(width), "--height", str(height),
             ],
             capture_output=True, text=True, errors="replace", check=False,
         )
@@ -165,17 +149,17 @@ def render_corpus(corpus, oracle, width, height, outdir, label):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--size", default="128", help="WIDTH or WIDTHxHEIGHT")
+    parser.add_argument("--width", type=int, default=128)
+    parser.add_argument("--height", type=int, default=128)
     parser.add_argument("--corpus", default="", help="comma-separated names; blank renders all")
     parser.add_argument("--out", type=Path, default=ROOT / "build")
     parser.add_argument("--oracle", type=Path, default=ROOT / ".oracle/scripts/windows_wmf_render.py")
     parser.add_argument("--worker", help=argparse.SUPPRESS)
     args = parser.parse_args()
 
-    try:
-        width, height = parse_size(args.size)
-    except ValueError as error:
-        parser.error(str(error))
+    width, height = args.width, args.height
+    if width < 1 or height < 1:
+        parser.error(f"Dimensions must be positive, got {width}x{height}")
 
     if args.worker:
         return run_worker(args.worker, args.oracle, width, height)

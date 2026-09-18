@@ -3,8 +3,12 @@ name: Reference images
 on:
   workflow_dispatch:
     inputs:
-      size:
-        description: '256 for a square, or 256x192'
+      width:
+        description: Output width in pixels
+        type: string
+        default: '128'
+      height:
+        description: Output height in pixels
         type: string
         default: '128'
       corpus:
@@ -16,7 +20,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: references-${{ inputs.size }}
+  group: references-${{ inputs.width }}x${{ inputs.height }}
 
 jobs:
   render:
@@ -40,9 +44,12 @@ jobs:
       - run: python -m pip install Pillow==12.3.0
       - id: render
         env:
-          SIZE: ${{ inputs.size }}
+          WIDTH: ${{ inputs.width }}
+          HEIGHT: ${{ inputs.height }}
           CORPUS: ${{ inputs.corpus }}
-        run: python scripts/render-references.py --size "$env:SIZE" --corpus "$env:CORPUS" --out build
+        run: >
+          python scripts/render-references.py
+          --width "$env:WIDTH" --height "$env:HEIGHT" --corpus "$env:CORPUS" --out build
       - shell: bash
         env:
           GH_TOKEN: ${{ github.token }}

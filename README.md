@@ -19,5 +19,5 @@ beside each metafile's path. Anything GDI would not draw has no PNG.
 
 To render a size that has no release yet:
 
-    gh workflow run references.yml -f size=256
-    gh workflow run references.yml -f size=256x192 -f corpus=wmffuzz
+    gh workflow run references.yml -f width=256 -f height=256
+    gh workflow run references.yml -f width=97 -f height=31 -f corpus=wmffuzz
