@@ -86,7 +86,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: bitplane/pillow-wmf
-          ref: 4e116c516ba64b31618fd89d6b2cbba0ae9c033a
+          ref: f20c227b74bbb69759d94f3e31988cabf3bc8d04
           path: .oracle
           sparse-checkout: scripts/windows_wmf_render.py
           sparse-checkout-cone-mode: false
