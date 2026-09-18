@@ -1,34 +1,62 @@
 name: Reference images
 
+# Renders whatever sizes.txt asks for that the releases do not already have.
+# Running it again does nothing. Delete a release to have it rebuilt.
+
 on:
   workflow_dispatch:
-    inputs:
-      width:
-        description: Output width in pixels
-        type: string
-        default: '128'
-      height:
-        description: Output height in pixels
-        type: string
-        default: '128'
-      corpus:
-        description: Comma-separated corpus names; blank renders all
-        type: string
-        default: ''
 
 permissions:
   contents: write
 
 concurrency:
-  group: references-${{ inputs.width }}x${{ inputs.height }}
+  group: references
 
 jobs:
-  render:
-    runs-on: windows-2025
-    timeout-minutes: 180
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
         with:
+          # The plan needs sizes.txt and the corpus names, which it reads from the
+          # commit with git ls-tree. None of the metafiles have to come down.
+          filter: blob:none
+          sparse-checkout: |
+            scripts
+            sizes.txt
+          persist-credentials: false
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/plan-references.py
+      - name: Open any release that does not exist yet
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CREATE: ${{ steps.plan.outputs.create }}
+        run: |
+          # Up front, so parallel render jobs only ever upload.
+          for tag in $(echo "$CREATE" | python3 -c 'import json,sys; print(" ".join(json.load(sys.stdin)))'); do
+            gh release create "$tag" --title "$tag" --notes ""
+          done
+
+  render:
+    needs: plan
+    if: needs.plan.outputs.matrix != '[]'
+    runs-on: windows-2025
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          filter: blob:none
+          sparse-checkout: ${{ matrix.sparse }}
           persist-credentials: false
       - uses: actions/checkout@v4
         with:
@@ -42,21 +70,15 @@ jobs:
         with:
           python-version: '3.13'
       - run: python -m pip install Pillow==12.3.0
-      - id: render
-        env:
-          WIDTH: ${{ inputs.width }}
-          HEIGHT: ${{ inputs.height }}
-          CORPUS: ${{ inputs.corpus }}
+      - env:
+          WIDTH: ${{ matrix.width }}
+          HEIGHT: ${{ matrix.height }}
+          CORPUS: ${{ matrix.corpora }}
         run: >
           python scripts/render-references.py
           --width "$env:WIDTH" --height "$env:HEIGHT" --corpus "$env:CORPUS" --out build
       - shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.render.outputs.size }}
-        run: |
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" build/*.tar.gz --clobber
-          else
-            gh release create "$TAG" build/*.tar.gz --title "$TAG" --notes ""
-          fi
+          TAG: ${{ matrix.size }}
+        run: gh release upload "$TAG" build/*.tar.gz --clobber

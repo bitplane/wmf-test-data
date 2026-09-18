@@ -10,14 +10,20 @@ etc.
 
 ## Reference images
 
-One release per output size:
+One release per output size, the sizes being whatever `sizes.txt` lists:
 
-    gh release download 128x128 -R bitplane/wmf-test-data
+    gh release download 257x193 -R bitplane/wmf-test-data
 
-Assets are `<corpus>-<width>x<height>.tar.gz`, holding the corpus tree with a PNG
-beside each metafile's path. Anything GDI would not draw has no PNG.
+Assets are `<corpus>-<width>x<height>.tar.gz`, unpacking to
+`<width>x<height>/<corpus>/` so several sizes share one cache directory without
+colliding. A PNG sits at each metafile's path. Anything GDI would not draw has
+no PNG.
 
-To render a size that has no release yet:
+## Making them
 
-    gh workflow run references.yml -f width=256 -f height=256
-    gh workflow run references.yml -f width=97 -f height=31 -f corpus=wmffuzz
+    gh workflow run references.yml
+
+That renders every corpus and size combination the releases do not already have,
+one Windows job per size, and nothing at all when they are all there. Add a line
+to `sizes.txt` or a directory to `corpora/` and run it again to fill the gap.
+Delete a release to have it rebuilt from scratch.

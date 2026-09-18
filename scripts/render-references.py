@@ -140,7 +140,9 @@ def render_corpus(corpus, oracle, width, height, outdir, label):
     staging.mkdir(parents=True, exist_ok=True)
     archive = outdir / f"{corpus}-{label}.tar.gz"
     with tarfile.open(archive, "w:gz") as tar:
-        tar.add(staging, arcname=corpus)
+        # Size first, so archives for different sizes unpack side by side into one
+        # cache directory instead of overwriting each other.
+        tar.add(staging, arcname=f"{label}/{corpus}")
 
     rendered = sum(1 for error in results.values() if not error)
     print(f"{corpus}: {rendered:,}/{len(items):,} -> {archive.name}", flush=True)

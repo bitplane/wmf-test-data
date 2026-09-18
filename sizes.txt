@@ -1,0 +1,5 @@
+# Output sizes to hold references for. One WIDTHxHEIGHT per line.
+# Primes and odd aspect ratios are the point: they catch mapping and
+# rounding bugs that a square power of two hides.
+128x128
+257x193
