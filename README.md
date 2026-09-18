@@ -2,12 +2,12 @@
 
 Test data for [pillow-wmf](https://github.com/bitplane/pillow-wmf).
 
-Used as a test data to oracle mapping repo. WMFs are not mine, see individual
-collections for source info, your mileage may vary, use at your own risk etc
-etc.
+Used as a test data to thrash out a pixel-perfect WMF rasterizer. The WMFs in
+this repo are not mine, see individual collections for source info, your mileage
+may vary, use at your own risk etc.
 
 `corpora/<name>/` holds the metafiles from one source. `sizes.txt` lists the
-output sizes worth holding references for.
+output sizes we're building. These are built on a Windows runner and released.
 
 ## Using a release
 
