@@ -45,6 +45,8 @@ jobs:
   render:
     needs: plan
     if: needs.plan.outputs.matrix != '[]'
+    # Without this the job name lists every matrix value, sparse patterns included.
+    name: render ${{ matrix.size }}
     runs-on: windows-2025
     timeout-minutes: 300
     strategy:
